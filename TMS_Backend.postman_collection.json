@@ -1,0 +1,1064 @@
+{
+	"info": {
+		"_postman_id": "tms-backend-collection",
+		"name": "TMS Backend API",
+		"description": "Complete API collection for Transport Management System Backend - All APIs are PUBLIC (no authentication required)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('userId', response._id);",
+									"    pm.environment.set('userRole', response.role);",
+									"    pm.environment.set('agentId', response._id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@tms.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/me?userId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "me"],
+							"query": [
+								{
+									"key": "userId",
+									"value": "{{userId}}",
+									"description": "User ID from login response"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users?role=Agent",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"],
+							"query": [
+								{
+									"key": "role",
+									"value": "Agent",
+									"disabled": true,
+									"description": "Optional: Filter by role (Admin, Agent, Finance)"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Agents",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/agents?branchId=",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "agents"],
+							"query": [
+								{
+									"key": "branchId",
+									"value": "",
+									"disabled": true,
+									"description": "Optional: Filter by branch ID"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "user_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@tms.com\",\n  \"password\": \"password123\",\n  \"phone\": \"9990001111\",\n  \"role\": \"Agent\",\n  \"branchId\": \"branch_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe Updated\",\n  \"email\": \"john@tms.com\",\n  \"phone\": \"9990001111\",\n  \"role\": \"Agent\",\n  \"branchId\": \"branch_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "user_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "user_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Branches",
+			"item": [
+				{
+					"name": "Get All Branches",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/branches",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "branches"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Branch",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"C3\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/branches",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "branches"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Branch",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"C3_UPDATED\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/branches/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "branches", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "branch_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Branch",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/branches/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "branches", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "branch_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Trips",
+			"item": [
+				{
+					"name": "Get All Trips",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/trips?page=1&limit=50&status=Active&agentId=&branch=&lrNumber=",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"disabled": true
+								},
+								{
+									"key": "agentId",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by agent ID"
+								},
+								{
+									"key": "branch",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by branch name"
+								},
+								{
+									"key": "lrNumber",
+									"value": "",
+									"disabled": true,
+									"description": "Search by LR number or Trip ID"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Trip",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Trip",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"lrNumber\": \"LR0001\",\n  \"tripId\": \"TR0001\",\n  \"date\": \"2024-01-15\",\n  \"truckNumber\": \"MH12AB1234\",\n  \"companyName\": \"ABC Transport\",\n  \"routeFrom\": \"Mumbai\",\n  \"routeTo\": \"Delhi\",\n  \"tonnage\": 10.5,\n  \"lrSheet\": \"Not Received\",\n  \"isBulk\": false,\n  \"freightAmount\": 50000,\n  \"advancePaid\": 20000,\n  \"agentId\": \"agent_id_here\",\n  \"branchId\": \"branch_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Bulk Trip",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"lrNumber\": \"LR0002\",\n  \"tripId\": \"TR0002\",\n  \"date\": \"2024-01-15\",\n  \"truckNumber\": \"MH12AB5678\",\n  \"companyName\": \"XYZ Transport\",\n  \"routeFrom\": \"Pune\",\n  \"routeTo\": \"Hyderabad\",\n  \"tonnage\": 15.0,\n  \"lrSheet\": \"Not Received\",\n  \"isBulk\": true,\n  \"freightAmount\": 0,\n  \"advancePaid\": 0,\n  \"agentId\": \"agent_id_here\",\n  \"branchId\": \"branch_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Trip",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Completed\",\n  \"lrSheet\": \"Received\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Trip",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add On-Trip Payment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 5000,\n  \"reason\": \"Fuel payment\",\n  \"mode\": \"Cash\",\n  \"bank\": \"\",\n  \"agentId\": \"agent_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id/payments",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id", "payments"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Deductions",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cess\": 1000,\n  \"kata\": 500,\n  \"excessTonnage\": 2000,\n  \"halting\": 1500,\n  \"expenses\": 3000,\n  \"beta\": 1000,\n  \"others\": 500,\n  \"othersReason\": \"Additional charges\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id/deductions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id", "deductions"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Close Trip",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"forceClose\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id/close",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id", "close"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here",
+									"description": "Trip ID"
+								}
+							]
+						},
+						"description": "Close a trip. Set forceClose=true for Admin to force close trips with disputes."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Attachment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "uploadedBy",
+									"value": "{{userId}}",
+									"type": "text",
+									"description": "Optional: User ID who uploaded"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id/attachments",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id", "attachments"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Attachment",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/trips/:id/attachments/:attachmentId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trips", ":id", "attachments", ":attachmentId"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "trip_id_here"
+								},
+								{
+									"key": "attachmentId",
+									"value": "attachment_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Ledger",
+			"item": [
+				{
+					"name": "Get Ledger Entries",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/ledger?page=1&limit=100&date=2024-01-15&agentId=&lrNumber=",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "ledger"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"disabled": true
+								},
+								{
+									"key": "date",
+									"value": "2024-01-15",
+									"disabled": true
+								},
+								{
+									"key": "agentId",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by agent ID"
+								},
+								{
+									"key": "lrNumber",
+									"value": "",
+									"disabled": true,
+									"description": "Search by LR number"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Agent Balance",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/ledger/balance/:agentId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "ledger", "balance", ":agentId"],
+							"variable": [
+								{
+									"key": "agentId",
+									"value": "agent_id_here",
+									"description": "Required: Agent ID"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Top-Up",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 100000,\n  \"agentId\": \"agent_id_here\",\n  \"mode\": \"Online\",\n  \"bank\": \"HDFC Bank\",\n  \"reason\": \"Monthly top-up\",\n  \"isVirtual\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/ledger/topup",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "ledger", "topup"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Virtual Top-Up",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 50000,\n  \"agentId\": \"agent_id_here\",\n  \"mode\": \"Cash\",\n  \"bank\": \"\",\n  \"reason\": \"Repair payment\",\n  \"isVirtual\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/ledger/topup",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "ledger", "topup"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Transfer to Agent",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"senderAgentId\": \"sender_agent_id_here\",\n  \"receiverAgentId\": \"receiver_agent_id_here\",\n  \"amount\": 10000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/ledger/transfer",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "ledger", "transfer"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Disputes",
+			"item": [
+				{
+					"name": "Get All Disputes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/disputes?status=Open&agentId=",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "disputes"],
+							"query": [
+								{
+									"key": "status",
+									"value": "Open",
+									"disabled": true,
+									"description": "Filter by status (Open, Resolved)"
+								},
+								{
+									"key": "agentId",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by agent ID"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Dispute",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/disputes/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "disputes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "dispute_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Dispute",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tripId\": \"trip_id_here\",\n  \"agentId\": \"agent_id_here\",\n  \"type\": \"Payment Dispute\",\n  \"reason\": \"Payment not received as per agreement\",\n  \"amount\": 50000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/disputes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "disputes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Resolve Dispute",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"resolvedBy\": \"admin_user_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/disputes/:id/resolve",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "disputes", ":id", "resolve"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "dispute_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "Get Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/dashboard?agentId=&branchId=",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "reports", "dashboard"],
+							"query": [
+								{
+									"key": "agentId",
+									"value": "",
+									"disabled": true,
+									"description": "Optional: Filter by agent ID"
+								},
+								{
+									"key": "branchId",
+									"value": "",
+									"disabled": true,
+									"description": "Optional: Filter by branch ID"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Trip Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/trips?startDate=2024-01-01&endDate=2024-01-31&agentId=&branch=C1&status=Completed",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "reports", "trips"],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2024-01-01",
+									"disabled": true
+								},
+								{
+									"key": "endDate",
+									"value": "2024-01-31",
+									"disabled": true
+								},
+								{
+									"key": "agentId",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "branch",
+									"value": "C1",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "Completed",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Ledger Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/ledger?startDate=2024-01-01&endDate=2024-01-31&agentId=&bank=HDFC Bank",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "reports", "ledger"],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2024-01-01",
+									"disabled": true
+								},
+								{
+									"key": "endDate",
+									"value": "2024-01-31",
+									"disabled": true
+								},
+								{
+									"key": "agentId",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "bank",
+									"value": "HDFC Bank",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Agent Performance Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/agents",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "reports", "agents"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Audit Logs",
+			"item": [
+				{
+					"name": "Get All Audit Logs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/audit-logs?date=&type=&userId=&page=1&limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "audit-logs"],
+							"query": [
+								{
+									"key": "date",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by date (YYYY-MM-DD)"
+								},
+								{
+									"key": "type",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by action type"
+								},
+								{
+									"key": "userId",
+									"value": "",
+									"disabled": true,
+									"description": "Filter by user ID"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/health",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "health"]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userRole",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "agentId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

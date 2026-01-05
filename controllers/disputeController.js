@@ -203,7 +203,20 @@ const createDispute = async (req, res) => {
 // @access  Public
 const resolveDispute = async (req, res) => {
   try {
-    const { resolvedBy } = req.body; // Frontend se resolvedBy (admin ID) aayega
+    const {
+      resolvedBy,
+      newFreight,
+      newAdvance,
+      lrNumber,
+      date,
+      truckNumber,
+      driverPhoneNumber,
+      companyName,
+      routeFrom,
+      routeTo,
+      tonnage,
+      remark // Optional remark from admin
+    } = req.body;
 
     const dispute = await Dispute.findById(req.params.id);
 
@@ -215,16 +228,147 @@ const resolveDispute = async (req, res) => {
       return res.status(400).json({ message: 'Dispute is already resolved' });
     }
 
+    const trip = await Trip.findById(dispute.tripId);
+    if (!trip) {
+      return res.status(404).json({ message: 'Associated trip not found' });
+    }
+
+    // 1. Mark Dispute as Resolved
     dispute.status = 'Resolved';
-    dispute.resolvedBy = resolvedBy || null; // Use resolvedBy from body
+    dispute.resolvedBy = resolvedBy || null;
     dispute.resolvedAt = new Date();
     await dispute.save();
 
-    // Restore trip status to Active
-    const trip = await Trip.findById(dispute.tripId);
-    if (trip) {
-      trip.status = 'Active';
-      await trip.save();
+    // Capture old values for audit
+    const oldFreight = trip.freight || 0;
+    const oldAdvance = trip.advance || 0;
+    const oldTripDetails = {
+      lrNumber: trip.lrNumber,
+      truckNumber: trip.truckNumber,
+      route: trip.route,
+      tonnage: trip.tonnage
+    };
+
+    // 2. Update Trip Details (Non-Financial)
+    if (lrNumber) trip.lrNumber = lrNumber;
+    if (date) trip.date = date;
+    if (truckNumber) trip.truckNumber = truckNumber;
+    if (driverPhoneNumber) trip.driverPhoneNumber = driverPhoneNumber;
+    if (companyName) trip.companyName = companyName;
+    if (routeFrom) trip.routeFrom = routeFrom;
+    if (routeTo) trip.routeTo = routeTo;
+    if (routeFrom && routeTo) trip.route = `${routeFrom} - ${routeTo}`; // Auto-update formatted route
+    if (tonnage) trip.tonnage = parseFloat(tonnage);
+
+    // 3. Handle Financial Updates (Freight & Advance)
+    let freightDiff = 0;
+    let advanceDiff = 0;
+
+    // --- FREIGHT CORRECTION ---
+    if (newFreight !== undefined && newFreight !== null) {
+      const correctedFreight = parseFloat(newFreight);
+      freightDiff = correctedFreight - oldFreight;
+
+      if (freightDiff !== 0) {
+        trip.freight = correctedFreight;
+        trip.freightAmount = correctedFreight;
+      }
+    }
+
+    // --- ADVANCE CORRECTION ---
+    if (newAdvance !== undefined && newAdvance !== null) {
+      const correctedAdvance = parseFloat(newAdvance);
+      advanceDiff = correctedAdvance - oldAdvance;
+
+      if (advanceDiff !== 0) {
+        console.log(`[DEBUG] Advance Changed. Old: ${oldAdvance}, New: ${correctedAdvance}, Diff: ${advanceDiff}`);
+        trip.advance = correctedAdvance;
+        trip.advancePaid = correctedAdvance;
+      }
+    }
+
+    // 4. Recalculate Trip Balance
+    const deductions = trip.deductions || {};
+    const totalAdditions = (parseFloat(deductions.cess) || 0) +
+      (parseFloat(deductions.kata) || 0) +
+      (parseFloat(deductions.excessTonnage) || 0) +
+      (parseFloat(deductions.halting) || 0) +
+      (parseFloat(deductions.expenses) || 0) +
+      (parseFloat(deductions.others) || 0);
+    const betaAmount = parseFloat(deductions.beta) || 0;
+    const totalPayments = trip.onTripPayments ? trip.onTripPayments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0;
+
+    const currentFreight = trip.freight || 0;
+    const currentAdvance = trip.advance || 0;
+
+    const newInitialBalance = currentFreight - currentAdvance;
+    trip.balance = newInitialBalance + totalAdditions - betaAmount - totalPayments;
+    trip.balanceAmount = trip.balance;
+
+    // 5. Restore Trip Status
+    trip.status = 'Active';
+    await trip.save();
+
+    const Ledger = require('../models/Ledger');
+
+    // 6. Generate Ledger Entries
+
+    // A. FREIGHT DIFF LEGER
+    if (freightDiff !== 0) {
+      let direction = '';
+      // Logic from User: Deficit -> Credit, Excess -> Debit
+      if (freightDiff > 0) direction = 'Credit';
+      else direction = 'Debit';
+
+      try {
+        await Ledger.create({
+          tripId: trip._id,
+          lrNumber: trip.lrNumber,
+          date: new Date(),
+          description: `Dispute Resolution - Freight Correction (${trip.lrNumber})`,
+          type: 'Dispute - Freight Correction',
+          amount: Math.abs(freightDiff),
+          advance: 0,
+          balance: 0, // Placeholder
+          agent: trip.agent,
+          agentId: trip.agent,
+          bank: 'HDFC Bank',
+          direction: direction,
+          paidBy: 'Admin'
+        });
+      } catch (err) {
+        console.error("Error creating freight ledger entry:", err);
+      }
+    }
+
+    // B. ADVANCE DIFF LEDGER
+    if (advanceDiff !== 0) {
+      let direction = '';
+      // Logic from User: Advance Increased -> Debit, Decreased -> Credit
+      if (advanceDiff > 0) direction = 'Debit';
+      else direction = 'Credit';
+
+      console.log(`[DEBUG] Creating Advance Ledger. Amount: ${Math.abs(advanceDiff)}, Direction: ${direction}`);
+      try {
+        const newLedger = await Ledger.create({
+          tripId: trip._id,
+          lrNumber: trip.lrNumber,
+          date: new Date(),
+          description: `Dispute Resolution - Advance Correction (${trip.lrNumber})`,
+          type: 'Dispute - Advance Correction',
+          amount: Math.abs(advanceDiff),
+          advance: 0,
+          balance: 0, // Placeholder
+          agent: trip.agent,
+          agentId: trip.agent,
+          bank: 'HDFC Bank',
+          direction: direction,
+          paidBy: 'Admin'
+        });
+        console.log('[DEBUG] Advance Ledger Created Success:', newLedger._id);
+      } catch (err) {
+        console.error("Error creating advance ledger entry:", err);
+      }
     }
 
     const populatedDispute = await Dispute.findById(dispute._id)
@@ -233,7 +377,7 @@ const resolveDispute = async (req, res) => {
       .populate('tripId', 'lrNumber route status _id')
       .populate('resolvedBy', 'name role _id');
 
-    // Create audit log
+    // Create Audit Log
     await createAuditLog(
       resolvedBy || null,
       'Admin',
@@ -244,6 +388,18 @@ const resolveDispute = async (req, res) => {
         lrNumber: dispute.lrNumber,
         disputeId: dispute._id,
         tripId: dispute.tripId,
+        oldFreight,
+        newFreight: trip.freight,
+        freightDiff,
+        oldAdvance,
+        newAdvance: trip.advance,
+        advanceDiff,
+        oldTripDetails,
+        newTripDetails: {
+          truckNumber: trip.truckNumber,
+          route: trip.route,
+          tonnage: trip.tonnage
+        }
       },
       req.ip
     );
@@ -261,4 +417,3 @@ module.exports = {
   createDispute,
   resolveDispute,
 };
-

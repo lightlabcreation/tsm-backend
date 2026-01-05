@@ -32,6 +32,8 @@ const ledgerSchema = new mongoose.Schema({
       'Settlement',
       'Trip Closed',
       'Beta/Batta Credit',
+      'Dispute - Freight Correction',
+      'Dispute - Advance Correction',
     ],
   },
   amount: {
@@ -68,10 +70,11 @@ const ledgerSchema = new mongoose.Schema({
   },
   // paymentMadeBy field - commented out temporarily to avoid enum validation errors
   // Will be added back after server restart with proper configuration
-  // paymentMadeBy: {
-  //   type: mongoose.Schema.Types.Mixed,
-  //   required: false,
-  // },
+  paidBy: {
+    type: String,
+    required: false,
+    default: 'Admin'
+  },
 }, {
   timestamps: true,
   strict: false, // Allow fields not in schema to be saved

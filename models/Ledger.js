@@ -34,6 +34,13 @@ const ledgerSchema = new mongoose.Schema({
       'Beta/Batta Credit',
       'Dispute - Freight Correction',
       'Dispute - Advance Correction',
+      'Dispute - Cess Correction',
+      'Dispute - Kata Correction',
+      'Dispute - ExcessTonnage Correction',
+      'Dispute - Halting Correction',
+      'Dispute - Expenses Correction',
+      'Dispute - Beta Correction',
+      'Dispute - Others Correction',
     ],
   },
   amount: {

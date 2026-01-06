@@ -239,16 +239,25 @@ const resolveDispute = async (req, res) => {
     dispute.resolvedAt = new Date();
     await dispute.save();
 
-    // Capture old values for audit
+    // Capture old values for audit and ledger
     const oldFreight = trip.freight || 0;
     const oldAdvance = trip.advance || 0;
+    // CRITICAL FIX: Convert Mongoose subdoc to POJO to safely capture old values
+    const oldDeductions = trip.deductions && trip.deductions.toObject ? trip.deductions.toObject() : (trip.deductions || {});
+
+    // Define oldTripDetails here so it's available for audit log later
     const oldTripDetails = {
       lrNumber: trip.lrNumber,
       truckNumber: trip.truckNumber,
       route: trip.route,
-      tonnage: trip.tonnage
+      tonnage: trip.tonnage,
+      deductions: oldDeductions
     };
 
+    console.log('[DEBUG] Resolve Dispute Request Body:', JSON.stringify(req.body, null, 2));
+    console.log('[DEBUG] Old Deductions Snapshot:', JSON.stringify(oldDeductions, null, 2));
+
+    // ... (existing code for trip details) ...
     // 2. Update Trip Details (Non-Financial)
     if (lrNumber) trip.lrNumber = lrNumber;
     if (date) trip.date = date;
@@ -257,8 +266,104 @@ const resolveDispute = async (req, res) => {
     if (companyName) trip.companyName = companyName;
     if (routeFrom) trip.routeFrom = routeFrom;
     if (routeTo) trip.routeTo = routeTo;
-    if (routeFrom && routeTo) trip.route = `${routeFrom} - ${routeTo}`; // Auto-update formatted route
+    if (routeFrom && routeTo) trip.route = `${routeFrom} - ${routeTo}`;
     if (tonnage) trip.tonnage = parseFloat(tonnage);
+
+    // Update Deductions & Calculate Diffs
+    const { cess, kata, excessTonnage, halting, expenses, beta, others, othersReason } = req.body;
+
+    // Helper to process deduction updates
+    const processDeduction = async (fieldName, newValue, type = 'Addition') => {
+      if (newValue === undefined) return;
+
+      const newVal = parseFloat(newValue) || 0;
+      const oldVal = parseFloat(oldDeductions[fieldName]) || 0;
+      const diff = newVal - oldVal;
+
+      // Update the trip object
+      trip.deductions[fieldName] = newVal;
+
+      if (fieldName === 'othersReason' && othersReason !== undefined) {
+        trip.deductions.othersReason = othersReason;
+      }
+
+      if (diff === 0 || fieldName === 'othersReason') return;
+
+      let direction = '';
+      if (type === 'Addition') {
+        // CORRECTION: Admin Logic
+        // These are "Closing Additions" which usually mean *Deductions from Agent* in this system context if they are costs?
+        // Wait, user said: "closing deduction ki entry debit me ayegi credit me nhi"
+        // referring to "Closing Additions" (Cess, Kata...)
+        // So Increase in Cess = Debit to Agent.
+        direction = diff > 0 ? 'Debit' : 'Credit';
+      } else if (type === 'Deduction') {
+        // Beta is a "Closing Deduction" (Batta) - usually means giving money TO driver/agent? 
+        // Or is it reducing the balance?
+        // Standard TMS: Beta is paid to driver, so it reduces the balance payable to Agent.
+        // If Beta Increases -> Payable Decreases -> Debit?
+        // Let's stick to the reverse of Addition.
+        // If Addition (Cess) Increase = Debit.
+        // Then Beta Increase = Credit? 
+        // User request specifically mentioned "Closing Additions ... debit me ayegi".
+        // Let's assume Beta works oppositely? Or same?
+        // Usually Cess/Kata are deductions FROM freight. So Freight - Cess = Balance.
+        // So Higher Cess = Lower Balance = Debit. (Correct)
+        // Beta is also usually deducted. Freight - Advance - Beta = Balance.
+        // So Higher Beta = Lower Balance = Debit.
+        // So ALL deductions (Cess, Kata, Beta) logic should likely be: Increase -> Debit, Decrease -> Credit.
+
+        direction = diff > 0 ? 'Debit' : 'Credit';
+      }
+
+      console.log(`[DEBUG] Deduction Ledger: field=${fieldName}, old=${oldVal}, new=${newVal}, diff=${diff}, dir=${direction}`);
+
+      // Clean up field name for Enum (CamelCase to PascalCaseish)
+      // keys: cess, kata, excessTonnage, halting, expenses, beta, others
+      // Enum expects: 'Dispute - Cess Correction', 'Dispute - ExcessTonnage Correction'
+      // Only "excessTonnage" needs care to match Enum "ExcessTonnage" (capital T) or "Excess tonnage"?
+      // Code below does `fieldName.charAt(0).toUpperCase() + fieldName.slice(1)`
+      // cess -> Cess (OK)
+      // excessTonnage -> ExcessTonnage (OK)
+
+      const typeLabel = `Dispute - ${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} Correction`;
+
+      const Ledger = require('../models/Ledger');
+      try {
+        await Ledger.create({
+          tripId: trip._id,
+          lrNumber: trip.lrNumber,
+          date: new Date(),
+          description: `Dispute Resolution - ${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} Correction (${trip.lrNumber})`,
+          type: typeLabel,
+          amount: Math.abs(diff),
+          advance: 0,
+          balance: 0,
+          agent: trip.agent,
+          agentId: trip.agent,
+          bank: 'HDFC Bank',
+          direction: direction,
+          paidBy: 'Admin'
+        });
+      } catch (err) {
+        console.error(`Error creating ledger for ${fieldName}:`, err);
+      }
+    };
+
+    // Process all deductions
+    // All these seem to be "Deductions from Freight" -> Reducing Agent Balance
+    // So Increase = Debit
+    await processDeduction('cess', cess, 'Addition');
+    await processDeduction('kata', kata, 'Addition');
+    await processDeduction('excessTonnage', excessTonnage, 'Addition');
+    await processDeduction('halting', halting, 'Addition');
+    await processDeduction('expenses', expenses, 'Addition');
+    await processDeduction('others', others, 'Addition');
+
+    if (othersReason !== undefined) trip.deductions.othersReason = othersReason;
+
+    // Beta also reduces balance? 
+    await processDeduction('beta', beta, 'Deduction');
 
     // 3. Handle Financial Updates (Freight & Advance)
     let freightDiff = 0;
@@ -281,21 +386,21 @@ const resolveDispute = async (req, res) => {
       advanceDiff = correctedAdvance - oldAdvance;
 
       if (advanceDiff !== 0) {
-        console.log(`[DEBUG] Advance Changed. Old: ${oldAdvance}, New: ${correctedAdvance}, Diff: ${advanceDiff}`);
         trip.advance = correctedAdvance;
         trip.advancePaid = correctedAdvance;
       }
     }
 
     // 4. Recalculate Trip Balance
-    const deductions = trip.deductions || {};
-    const totalAdditions = (parseFloat(deductions.cess) || 0) +
-      (parseFloat(deductions.kata) || 0) +
-      (parseFloat(deductions.excessTonnage) || 0) +
-      (parseFloat(deductions.halting) || 0) +
-      (parseFloat(deductions.expenses) || 0) +
-      (parseFloat(deductions.others) || 0);
-    const betaAmount = parseFloat(deductions.beta) || 0;
+    const totalAdditions = (trip.deductions.cess || 0) +
+      (trip.deductions.kata || 0) +
+      (trip.deductions.excessTonnage || 0) +
+      (trip.deductions.halting || 0) +
+      (trip.deductions.expenses || 0) +
+      (trip.deductions.others || 0);
+    const betaAmount = trip.deductions.beta || 0;
+
+    // Re-sum payments just in case
     const totalPayments = trip.onTripPayments ? trip.onTripPayments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0;
 
     const currentFreight = trip.freight || 0;
@@ -311,15 +416,11 @@ const resolveDispute = async (req, res) => {
 
     const Ledger = require('../models/Ledger');
 
-    // 6. Generate Ledger Entries
+    // 6. Generate Ledger Entries for Freight/Advance (existing logic)
 
     // A. FREIGHT DIFF LEGER
     if (freightDiff !== 0) {
-      let direction = '';
-      // Logic from User: Deficit -> Credit, Excess -> Debit
-      if (freightDiff > 0) direction = 'Credit';
-      else direction = 'Debit';
-
+      let direction = freightDiff > 0 ? 'Credit' : 'Debit';
       try {
         await Ledger.create({
           tripId: trip._id,
@@ -329,7 +430,7 @@ const resolveDispute = async (req, res) => {
           type: 'Dispute - Freight Correction',
           amount: Math.abs(freightDiff),
           advance: 0,
-          balance: 0, // Placeholder
+          balance: 0,
           agent: trip.agent,
           agentId: trip.agent,
           bank: 'HDFC Bank',
@@ -343,14 +444,9 @@ const resolveDispute = async (req, res) => {
 
     // B. ADVANCE DIFF LEDGER
     if (advanceDiff !== 0) {
-      let direction = '';
-      // Logic from User: Advance Increased -> Debit, Decreased -> Credit
-      if (advanceDiff > 0) direction = 'Debit';
-      else direction = 'Credit';
-
-      console.log(`[DEBUG] Creating Advance Ledger. Amount: ${Math.abs(advanceDiff)}, Direction: ${direction}`);
+      let direction = advanceDiff > 0 ? 'Debit' : 'Credit';
       try {
-        const newLedger = await Ledger.create({
+        await Ledger.create({
           tripId: trip._id,
           lrNumber: trip.lrNumber,
           date: new Date(),
@@ -358,14 +454,13 @@ const resolveDispute = async (req, res) => {
           type: 'Dispute - Advance Correction',
           amount: Math.abs(advanceDiff),
           advance: 0,
-          balance: 0, // Placeholder
+          balance: 0,
           agent: trip.agent,
           agentId: trip.agent,
           bank: 'HDFC Bank',
           direction: direction,
           paidBy: 'Admin'
         });
-        console.log('[DEBUG] Advance Ledger Created Success:', newLedger._id);
       } catch (err) {
         console.error("Error creating advance ledger entry:", err);
       }
@@ -394,11 +489,13 @@ const resolveDispute = async (req, res) => {
         oldAdvance,
         newAdvance: trip.advance,
         advanceDiff,
-        oldTripDetails,
+        // Detailed Audit for Deductions can be added if needed, but 'newTripDetails' captures the *result*
+        oldTripDetails: { ...oldTripDetails, deductions: oldDeductions }, // Add deductions to old details
         newTripDetails: {
           truckNumber: trip.truckNumber,
           route: trip.route,
-          tonnage: trip.tonnage
+          tonnage: trip.tonnage,
+          deductions: trip.deductions
         }
       },
       req.ip

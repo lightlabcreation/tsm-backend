@@ -40,6 +40,7 @@ const login = async (req, res) => {
       phone: user.phone,
       role: user.role, // Admin, Agent, or Finance
       branch: user.branch,
+      profileImage: user.profileImage,
       token: generateToken(user._id),
     };
 
@@ -62,7 +63,7 @@ const getMe = async (req, res) => {
     }
 
     const user = await User.findById(userId).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -75,6 +76,7 @@ const getMe = async (req, res) => {
       phone: user.phone,
       role: user.role, // Admin, Agent, or Finance
       branch: user.branch,
+      profileImage: user.profileImage,
     });
   } catch (error) {
     console.error('Get me error:', error);

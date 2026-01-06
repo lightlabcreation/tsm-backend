@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const upload = require('../utils/upload');
 const {
   getUsers,
   getUser,
@@ -18,7 +19,7 @@ router.route('/')
 
 router.route('/:id')
   .get(getUser)
-  .put(updateUser)
+  .put(upload.single('profileImage'), updateUser)
   .delete(deleteUser);
 
 module.exports = router;

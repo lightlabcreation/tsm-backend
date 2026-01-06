@@ -8,20 +8,20 @@ const getUsers = async (req, res) => {
   try {
     const { role } = req.query;
     let query = {};
-    
+
     // Filter by role if provided
     if (role) {
       query.role = role;
     }
-    
+
     const users = await User.find(query).select('-password').sort({ createdAt: -1 });
-    
+
     // Transform to match frontend expectations (with id field)
     const transformedUsers = users.map(user => ({
       ...user.toObject(),
       id: user._id,
     }));
-    
+
     res.json(transformedUsers);
   } catch (error) {
     console.error('Get users error:', error);
@@ -35,18 +35,18 @@ const getUsers = async (req, res) => {
 const getAgents = async (req, res) => {
   try {
     const { branchId } = req.query; // Optional branch filter
-    
+
     let query = { role: 'Agent', isActive: true };
-    
+
     // Filter by branch if provided
     if (branchId) {
       query.branch = branchId;
     }
-    
+
     const agents = await User.find(query)
       .select('name email phone branch _id')
       .sort({ name: 1 });
-    
+
     // Transform to match frontend expectations (AgentFilter component)
     const transformedAgents = agents.map(agent => ({
       id: agent._id,
@@ -56,7 +56,7 @@ const getAgents = async (req, res) => {
       phone: agent.phone,
       branch: agent.branch,
     }));
-    
+
     res.json(transformedAgents);
   } catch (error) {
     console.error('Get agents error:', error);
@@ -70,12 +70,21 @@ const getAgents = async (req, res) => {
 const getUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    res.json(user);
+
+    res.json({
+      _id: user._id,
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      branch: user.branch,
+      profileImage: user.profileImage
+    });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -150,6 +159,7 @@ const createUser = async (req, res) => {
       phone: user.phone,
       role: user.role,
       branch: user.branch,
+      profileImage: user.profileImage,
     });
   } catch (error) {
     console.error('Create user error:', error);
@@ -199,7 +209,7 @@ const updateUser = async (req, res) => {
     user.email = email ? email.toLowerCase() : user.email;
     user.phone = phone || user.phone;
     user.role = role || user.role;
-    
+
     // Update branch based on role and branchId
     if (role === 'Agent' && branchId) {
       const Branch = require('../models/Branch');
@@ -217,23 +227,37 @@ const updateUser = async (req, res) => {
       user.password = password;
     }
 
+    // Update profileImage if uploaded
+    if (req.file) {
+      // Store relative path 'uploads/filename' instead of absolute path
+      // This ensures it works with the static file serving in server.js
+      user.profileImage = 'uploads/' + req.file.filename;
+    }
+
     const updatedUser = await user.save();
 
-    // Create audit log
-    const userId = req.body.userId || null; // Admin who updated the user
-    const userRole = req.body.userRole || 'Admin';
-    await createAuditLog(
-      userId,
-      userRole,
-      'Update User',
-      'User',
-      user._id,
-      {
-        changes: req.body,
-        previousEmail: user.email,
-      },
-      req.ip
-    );
+    // Create audit log - wrap in try/catch to prevent failure if audit log fails
+    try {
+      const userId = req.body.userId || updatedUser._id;
+      const userRole = req.body.userRole || user.role;
+
+      await createAuditLog(
+        userId,
+        userRole,
+        'Update User',
+        'User',
+        updatedUser._id,
+        {
+          changes: req.body,
+          previousEmail: user.email,
+          imageUpdated: !!req.file
+        },
+        req.ip
+      );
+    } catch (auditError) {
+      console.error('Audit log creation failed:', auditError);
+      // Continue execution - don't fail the request just because audit log failed
+    }
 
     res.json({
       _id: updatedUser._id,
@@ -243,6 +267,7 @@ const updateUser = async (req, res) => {
       phone: updatedUser.phone,
       role: updatedUser.role,
       branch: updatedUser.branch,
+      profileImage: updatedUser.profileImage,
     });
   } catch (error) {
     console.error('Update user error:', error);
@@ -266,7 +291,7 @@ const deleteUser = async (req, res) => {
     // Also check query params as fallback
     const userId = req.body?.userId || req.query?.userId || null;
     const userRole = req.body?.userRole || req.query?.userRole || 'Admin';
-    
+
     await createAuditLog(
       userId,
       userRole,

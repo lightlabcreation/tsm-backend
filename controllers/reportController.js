@@ -2,120 +2,60 @@ const Trip = require('../models/Trip');
 const Ledger = require('../models/Ledger');
 const Dispute = require('../models/Dispute');
 const User = require('../models/User');
+const AuditLog = require('../models/AuditLog');
 
 // @desc    Get dashboard stats
 // @route   GET /api/reports/dashboard
 // @access  Public
 const getDashboardStats = async (req, res) => {
   try {
-    const { agentId, branchId } = req.query; // Optional filters
+    const { agentId, branchId, startDate, endDate } = req.query; // Filters
     let tripQuery = {};
     let ledgerQuery = {};
-    let disputeQuery = {};
+    let auditQuery = {};
 
-    // No role-based filtering - use query params if provided
+    console.log('Dashboard Stats Request:', { agentId, branchId, startDate, endDate });
+
+    // Date Range Filter
+    if (startDate || endDate) {
+      tripQuery.date = {};
+      ledgerQuery.date = {};
+      auditQuery.createdAt = {}; // Audit logs use createdAt
+
+      if (startDate) {
+        tripQuery.date.$gte = new Date(startDate);
+        ledgerQuery.date.$gte = new Date(startDate);
+        auditQuery.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        // Include full end date
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+
+        tripQuery.date.$lte = endDateTime;
+        ledgerQuery.date.$lte = endDateTime;
+        auditQuery.createdAt.$lte = endDateTime;
+      }
+    }
+
+    // Role/Branch Filters
     if (agentId) {
       tripQuery.agent = agentId;
       ledgerQuery.agent = agentId;
-      disputeQuery.agent = agentId;
     }
     if (branchId) {
       tripQuery.branch = branchId;
     }
 
-    // Trip stats
+    // 1. Trip Stats
     const activeTrips = await Trip.countDocuments({ ...tripQuery, status: 'Active' });
     const completedTrips = await Trip.countDocuments({ ...tripQuery, status: 'Completed' });
-    const disputedTrips = await Trip.countDocuments({ 
-      ...tripQuery, 
-      status: { $in: ['In Dispute', 'Dispute'] } 
+    const tripsInDispute = await Trip.countDocuments({
+      ...tripQuery,
+      status: { $in: ['In Dispute', 'Dispute'] }
     });
-    const totalTrips = await Trip.countDocuments(tripQuery);
-
-    // Ledger stats - Get today's entries (check both createdAt and date fields)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    // Query today's ledger entries - use createdAt as primary, date as fallback
-    const todayLedger = await Ledger.find({
-      ...ledgerQuery,
-      $or: [
-        { createdAt: { $gte: today, $lt: tomorrow } },
-        { date: { $gte: today, $lt: tomorrow } }
-      ]
-    }).lean(); // Use lean() for better performance
-    
-    console.log('Today ledger entries count:', todayLedger.length)
-    console.log('Today date range:', today, 'to', tomorrow)
-    
-    // Also get Finance payments directly for debugging
-    const allFinancePayments = await Ledger.find({
-      ...ledgerQuery,
-      type: 'On-Trip Payment',
-      paymentMadeBy: 'Finance'
-    }).lean();
-    console.log('All Finance payments (any date):', allFinancePayments.length, allFinancePayments.map(p => ({ amount: p.amount, date: p.date, createdAt: p.createdAt, lrNumber: p.lrNumber })))
-
-    // Calculate daily top-ups from today's ledger entries
-    const dailyTopUps = todayLedger
-      .filter(l => l.type === 'Top-up' || l.type === 'Virtual Top-up')
-      .reduce((sum, l) => sum + (l.amount || 0), 0);
-    
-    console.log('Daily top-ups today:', dailyTopUps, 'from', todayLedger.filter(l => l.type === 'Top-up' || l.type === 'Virtual Top-up').length, 'entries')
-
-    // Finance mid-payments: On-Trip Payments made by Finance today
-    // SIMPLIFIED APPROACH: Query all Finance payments and filter by date in code
-    const allFinancePaymentsQuery = await Ledger.find({
-      type: 'On-Trip Payment',
-      paymentMadeBy: 'Finance'
-    }).lean();
-    
-    console.log('=== FINANCE PAYMENTS DEBUG ===')
-    console.log('All Finance payments found:', allFinancePaymentsQuery.length)
-    console.log('Today date range:', today.toISOString(), 'to', tomorrow.toISOString())
-    
-    allFinancePaymentsQuery.forEach(p => {
-      const pDate = p.date ? new Date(p.date) : new Date(p.createdAt)
-      const isToday = pDate >= today && pDate < tomorrow
-      console.log(`Finance payment: Amount=${p.amount}, LR=${p.lrNumber}, Date=${pDate.toISOString()}, IsToday=${isToday}, paymentMadeBy=${p.paymentMadeBy}`)
-    })
-    
-    // Filter by today's date
-    const financePaymentsToday = allFinancePaymentsQuery.filter(p => {
-      const pDate = p.date ? new Date(p.date) : new Date(p.createdAt)
-      return pDate >= today && pDate < tomorrow
-    })
-    
-    console.log('Finance payments today (filtered):', financePaymentsToday.length, financePaymentsToday.map(p => ({ amount: p.amount, lrNumber: p.lrNumber })))
-    
-    // Calculate total
-    const financeMidPayments = financePaymentsToday.reduce((sum, l) => sum + (l.amount || 0), 0);
-    
-    console.log('Finance mid-payments today (final):', financeMidPayments)
-    console.log('=== END FINANCE PAYMENTS DEBUG ===')
-
-    // All daily payments (for backward compatibility)
-    const dailyPayments = todayLedger
-      .filter(l => l.type === 'On-Trip Payment')
-      .reduce((sum, l) => sum + l.amount, 0);
-
-    // Bank-wise spend (always included)
-    const bankWiseSpend = {};
-    const allLedger = await Ledger.find({ direction: 'Debit' });
-    allLedger.forEach(entry => {
-      const bank = entry.bank || 'Cash';
-      bankWiseSpend[bank] = (bankWiseSpend[bank] || 0) + entry.amount;
-    });
-
-    // Dispute stats
-    const openDisputes = await Dispute.countDocuments({ ...disputeQuery, status: 'Open' });
-    const resolvedDisputes = await Dispute.countDocuments({ ...disputeQuery, status: 'Resolved' });
-
-    // Additional trip stats
-    const lrSheetsNotReceived = await Trip.countDocuments({ 
-      ...tripQuery, 
+    const lrNotReceived = await Trip.countDocuments({
+      ...tripQuery,
       $or: [
         { lrSheet: { $exists: false } },
         { lrSheet: null },
@@ -123,71 +63,121 @@ const getDashboardStats = async (req, res) => {
         { lrSheet: '' }
       ]
     });
-    const normalTrips = await Trip.countDocuments({ ...tripQuery, isBulk: false });
+    const regularTrips = await Trip.countDocuments({ ...tripQuery, isBulk: { $ne: true } });
     const bulkTrips = await Trip.countDocuments({ ...tripQuery, isBulk: true });
 
-    // Bank-wise movements today
-    const bankSummary = {};
-    todayLedger.forEach(entry => {
-      const bank = entry.bank || 'Cash';
-      if (!bankSummary[bank]) {
-        bankSummary[bank] = { credit: 0, debit: 0, net: 0 };
-      }
-      if (entry.direction === 'Credit') {
-        bankSummary[bank].credit += (entry.amount || 0);
-        bankSummary[bank].net += (entry.amount || 0);
+    // 2. Unique Counts
+    const uniqueAgents = (await Trip.distinct('agent', tripQuery)).length;
+    const uniqueTrucks = (await Trip.distinct('truckNumber', tripQuery)).length;
+
+    let totalAgentsCount = uniqueAgents;
+    if (!startDate && !endDate && !agentId) {
+      totalAgentsCount = await User.countDocuments({ role: 'Agent' });
+      console.log('Counting ALL agents from User model:', totalAgentsCount);
+    }
+
+    // 3. Audit Events
+    let totalAuditLogs = 0;
+    try {
+      if (AuditLog) {
+        totalAuditLogs = await AuditLog.countDocuments(auditQuery);
+        console.log('AuditLog count success:', totalAuditLogs);
       } else {
-        bankSummary[bank].debit += (entry.amount || 0);
-        bankSummary[bank].net -= (entry.amount || 0);
+        console.error('AuditLog model is undefined');
       }
-    });
-    const bankMovementsToday = Object.keys(bankSummary).length;
-    const totalBankNet = Object.values(bankSummary).reduce((sum, b) => sum + b.net, 0);
+    } catch (e) {
+      console.error('Error counting audit logs:', e);
+    }
+
+    // 4. Dispute Stats
+    let disputeQuery = {};
+    if (startDate || endDate) {
+      disputeQuery.createdAt = {};
+      if (startDate) disputeQuery.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        disputeQuery.createdAt.$lte = endDateTime;
+      }
+    }
+    if (agentId) {
+      disputeQuery.agent = agentId;
+    }
+
+    const openDisputes = await Dispute.countDocuments({ ...disputeQuery, status: 'Open' });
+    const resolvedDisputes = await Dispute.countDocuments({ ...disputeQuery, status: 'Resolved' });
 
     const response = {
-      trips: {
-        active: activeTrips,
-        completed: completedTrips,
-        disputed: disputedTrips,
-        total: totalTrips,
-      },
-      ledger: {
-        dailyTopUps,
-        dailyPayments,
-        bankWiseSpend,
-      },
-      disputes: {
+      activeTrips,
+      completedTrips,
+      tripsInDispute,
+      lrNotReceived,
+      regularTrips,
+      bulkTrips,
+      totalAgents: totalAgentsCount,
+      totalTrucks: uniqueTrucks,
+      totalAuditLogs,
+      disputeStats: {
+        total: openDisputes + resolvedDisputes,
         open: openDisputes,
-        resolved: resolvedDisputes,
-      },
-      // Finance dashboard specific stats
-      midPaymentsToday: financeMidPayments,
-      topUpsToday: dailyTopUps,
-      activeTrips: activeTrips,
-      lrSheetsNotReceived: lrSheetsNotReceived,
-      normalTrips: normalTrips,
-      bulkTrips: bulkTrips,
-      bankMovementsToday: bankMovementsToday,
-      totalBankNet: totalBankNet,
-      bankSummary: bankSummary,
-      trips: {
-        total: totalTrips,
-        active: activeTrips,
-        completed: completedTrips,
-        disputed: disputedTrips,
-      },
+        resolved: resolvedDisputes
+      }
     };
-    
-    console.log('=== DASHBOARD STATS RESPONSE ===')
-    console.log('midPaymentsToday:', financeMidPayments)
-    console.log('topUpsToday:', dailyTopUps)
-    console.log('activeTrips:', activeTrips)
-    console.log('normalTrips:', normalTrips)
-    console.log('bulkTrips:', bulkTrips)
-    console.log('Full response:', JSON.stringify(response, null, 2))
-    console.log('=== END DASHBOARD STATS ===')
-    
+
+    // 5. Finance Metrics (Mid-Payments & Top-Ups)
+    let financeDateQuery = {};
+    if (startDate || endDate) {
+      financeDateQuery = { ...ledgerQuery };
+    } else {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      financeDateQuery.date = {
+        $gte: todayStart,
+        $lte: todayEnd
+      };
+    }
+
+    // Mid-Payments
+    const midPaymentsAgg = await Ledger.aggregate([
+      {
+        $match: {
+          ...financeDateQuery,
+          type: 'On-Trip Payment',
+          paymentMadeBy: 'Finance'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+    response.midPaymentsToday = midPaymentsAgg.length > 0 ? midPaymentsAgg[0].total : 0;
+
+    // Top-Ups
+    const topUpsAgg = await Ledger.aggregate([
+      {
+        $match: {
+          ...financeDateQuery,
+          type: { $in: ['Top-up', 'Virtual Top-up'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+    response.topUpsToday = topUpsAgg.length > 0 ? topUpsAgg[0].total : 0;
+
+    console.log('Dashboard stats calculated:', JSON.stringify(response, null, 2));
     res.json(response);
+
   } catch (error) {
     console.error('Get dashboard stats error:', error);
     res.status(500).json({ message: 'Server error' });

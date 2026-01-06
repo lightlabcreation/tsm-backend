@@ -229,9 +229,8 @@ const updateUser = async (req, res) => {
 
     // Update profileImage if uploaded
     if (req.file) {
-      // Store relative path 'uploads/filename' instead of absolute path
-      // This ensures it works with the static file serving in server.js
-      user.profileImage = 'uploads/' + req.file.filename;
+      // Store Cloudinary URL
+      user.profileImage = req.file.path;
     }
 
     const updatedUser = await user.save();

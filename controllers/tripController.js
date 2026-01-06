@@ -1427,6 +1427,9 @@ const addAttachment = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    console.log('DEBUG: addAttachment called');
+    console.log('DEBUG: req.file:', req.file);
+
     const { uploadedBy } = req.body; // Get uploadedBy from body
 
     const attachment = {
@@ -1435,6 +1438,8 @@ const addAttachment = async (req, res) => {
       path: req.file.path,
       uploadedBy: uploadedBy || trip.agent, // Use uploadedBy from body or trip's agent
     };
+
+    console.log('DEBUG: Attachment object to push:', attachment);
 
     trip.attachments.push(attachment);
     await trip.save();

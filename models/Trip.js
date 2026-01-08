@@ -85,6 +85,10 @@ const tripSchema = new mongoose.Schema({
     type: String,
     default: 'Not Received',
   },
+  invoiceNumber: {
+    type: String,
+    default: '',
+  },
   isBulk: {
     type: Boolean,
     default: false,

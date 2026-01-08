@@ -428,14 +428,19 @@ const updateTrip = async (req, res) => {
 
     // No permission checks - public access
     // Update allowed fields
+    console.log('Update Trip Body:', req.body); // Debug log
     if (req.body.status !== undefined) {
       trip.status = req.body.status;
     }
     if (req.body.lrSheet !== undefined) {
       trip.lrSheet = req.body.lrSheet;
     }
+    if (req.body.invoiceNumber !== undefined) {
+      trip.invoiceNumber = req.body.invoiceNumber;
+    }
 
     const updatedTrip = await trip.save();
+    console.log('Trip Saved, Invoice Number:', updatedTrip.invoiceNumber); // Debug log
 
     // Populate trip with error handling
     let populatedTrip;
